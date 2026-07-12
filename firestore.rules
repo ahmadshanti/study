@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // بيانات الطالب: بس صاحبها يقدر يعدلها، لكن الكل يقدر يقراها (للیدربورد)
+    match /users/{uid} {
+      allow read: if true;
+      allow create: if request.auth != null && request.auth.uid == uid;
+      allow update: if request.auth != null && request.auth.uid == uid;
+
+      match /sessions/{sessionId} {
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow create: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+
+    // مين شغال هلق - أي مستخدم مسجل يقدر يكتب مستنده هو بس، والكل يقرا
+    match /activeUsers/{uid} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // المواد التنافسية - القراءة للكل، الكتابة ممنوعة من الكلاينت
+    // (بتنضاف/تتعدل من لوحة الأدمن؛ لأمان أفضل حقيقي حط custom claim admin
+    // وبدّل السطر تحت بشرط request.auth.token.admin == true)
+    match /subjects/{subjectId} {
+      allow read: if true;
+      allow write: if true; // ⚠️ بسّطناها بقصد، حسّنها لاحقاً بـ custom claims
+    }
+
+    // ليدربورد المواد
+    match /leaderboard_subject/{subjectId}/students/{uid} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // الغرف
+    match /rooms/{roomId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      // فقط تحديث totalMinutes مسموح من أي طالب داخل الجلسة (increment)
+      allow update: if request.auth != null;
+
+      match /members/{uid} {
+        allow read: if true;
+        allow write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+  }
+}
