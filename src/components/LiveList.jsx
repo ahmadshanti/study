@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
 
+// جلسات أقدم من هيك بالساعات لازم تكون تعلّقت (تاب اتسكر بدون ما ينده stop)
+// مش شغالة فعلاً — منخفيها من قائمة "شغالين هلق" لحد ما تنمسح فعلياً.
+const STALE_AFTER_MINUTES = 4 * 60;
+
 function rankClass(i) {
   if (i === 0) return "top1";
   if (i === 1) return "top2";
@@ -16,16 +20,17 @@ export default function LiveList({ docs }) {
     return () => clearInterval(id);
   }, []);
 
-  if (docs.length === 0) {
-    return <div className="empty-state">محدا شغال هلق... يلا كون أول واحد 👀</div>;
-  }
-
   const ranked = docs
     .map((data) => ({
       ...data,
       elapsedMin: data.startedAtClient ? Math.floor((Date.now() - data.startedAtClient) / 60000) : 0,
     }))
+    .filter((data) => data.elapsedMin < STALE_AFTER_MINUTES)
     .sort((a, b) => b.elapsedMin - a.elapsedMin);
+
+  if (ranked.length === 0) {
+    return <div className="empty-state">محدا شغال هلق... يلا كون أول واحد 👀</div>;
+  }
 
   return (
     <>
