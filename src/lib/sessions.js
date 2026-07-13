@@ -5,8 +5,28 @@ import {
   writeBatch,
 } from "firebase/firestore";
 
+function pad(n) { return String(n).padStart(2, "0"); }
+
+export function getDayKey(d = new Date()) {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+export function getMonthKey(d = new Date()) {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+}
+
+export function getWeekKey(d = new Date()) {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+  return `${date.getUTCFullYear()}-W${pad(weekNo)}`;
+}
+
 /**
- * بيبلش جلسة: بيسجل الطالب بـ activeUsers (يظهر Live لباقي الطلاب)
+ * بيبلش جلسة: بيسجل الطالب بـ activeUsers (يظهر Live لباقي الطلاب).
+ * بتنعمل مرة وحدة بداية كل جلسة بومودورو (مش كل شوط عمل).
  */
 export async function startActiveSession({ uid, name, task, subjectId, subjectName, roomId }) {
   const ref = doc(db, "activeUsers", uid);
@@ -17,71 +37,70 @@ export async function startActiveSession({ uid, name, task, subjectId, subjectNa
     subjectName: subjectName || null,
     roomId: roomId || null,
     startTime: serverTimestamp(),
-    startedAtClient: Date.now(), // نستخدمها لحساب الوقت المحلي بسرعة بدون انتظار السيرفر
+    startedAtClient: Date.now(),
   });
 }
 
-/**
- * بينهي الجلسة: بيمسحها من activeUsers، وبيحسب الدقايق الفعلية،
- * وبيحدث: users.totalMinutes دايماً، subject leaderboard إذا فيه مادة،
- * room members + room total إذا فيه غرفة، ويحفظ سجل الجلسة بـ sessions.
- */
-export async function endActiveSession({ uid, name, task, subjectId, subjectName, roomId, elapsedMinutes }) {
-  const minutes = Math.max(0, Math.round(elapsedMinutes));
-
-  // نمسح النشاط الحي دايماً (حتى لو الجلسة قصيرة)
+export async function clearActiveSession(uid) {
   await deleteDoc(doc(db, "activeUsers", uid));
+}
 
-  if (minutes < MIN_SESSION_MINUTES) return { savedMinutes: 0 };
+/**
+ * بتسجل دقايق درس فعلية (شوط عمل خلص أو انوقف بنص الطريق) وبتحدث:
+ * users.totalMinutes، ليدربورد المادة/الغرفة إذا فيها، ليدربورد اليوم/الأسبوع/الشهر،
+ * سجل الجلسة، والستريك والبادجز. بتنعاد استدعاءها كل ما يخلص شوط عمل (work segment)
+ * وليس بس مرة وحدة بآخر الجلسة، عشان الوقت "يتجدد" على الليدربورد أول بأول.
+ */
+export async function recordStudyMinutes({ uid, name, task, subjectId, subjectName, roomId, minutes }) {
+  const mins = Math.max(0, Math.round(minutes));
+  if (mins < MIN_SESSION_MINUTES) return { savedMinutes: 0 };
 
   const batch = writeBatch(db);
 
-  // 1) المجموع العام للطالب
   const userRef = doc(db, "users", uid);
-  batch.update(userRef, { totalMinutes: increment(minutes) });
+  batch.update(userRef, { totalMinutes: increment(mins) });
 
-  // 2) ليدربورد المادة (فقط إذا اختار مادة تنافسية من قائمة الأدمن)
   if (subjectId) {
     const subjLbRef = doc(db, "leaderboard_subject", subjectId, "students", uid);
-    batch.set(subjLbRef, {
-      name,
-      totalMinutes: increment(minutes),
-    }, { merge: true });
+    batch.set(subjLbRef, { name, totalMinutes: increment(mins) }, { merge: true });
   }
 
-  // 3) الغرفة (فريق) — مساهمة الطالب + مجموع الفريق الكلي
   if (roomId) {
     const memberRef = doc(db, "rooms", roomId, "members", uid);
-    batch.set(memberRef, {
-      name,
-      totalMinutes: increment(minutes),
-    }, { merge: true });
+    batch.set(memberRef, { name, totalMinutes: increment(mins) }, { merge: true });
 
     const roomRef = doc(db, "rooms", roomId);
-    batch.update(roomRef, { totalMinutes: increment(minutes) });
+    batch.update(roomRef, { totalMinutes: increment(mins) });
   }
+
+  const dayRef = doc(db, "leaderboard_daily", getDayKey(), "students", uid);
+  batch.set(dayRef, { name, totalMinutes: increment(mins) }, { merge: true });
+
+  const weekRef = doc(db, "leaderboard_weekly", getWeekKey(), "students", uid);
+  batch.set(weekRef, { name, totalMinutes: increment(mins) }, { merge: true });
+
+  const monthRef = doc(db, "leaderboard_monthly", getMonthKey(), "students", uid);
+  batch.set(monthRef, { name, totalMinutes: increment(mins) }, { merge: true });
 
   await batch.commit();
 
-  // 4) سجل الجلسة (تاريخ الاستخدام - مفيد لاحقاً لتقارير أسبوعية)
   await addDoc(collection(db, "users", uid, "sessions"), {
     task: task || null,
     subjectId: subjectId || null,
     subjectName: subjectName || null,
     roomId: roomId || null,
-    minutes,
-    date: new Date().toISOString().slice(0, 10), // YYYY-MM-DD
+    minutes: mins,
+    date: getDayKey(),
     createdAt: serverTimestamp(),
   });
 
-  // 5) الستريك والبادجز
-  await updateStreakAndBadges(uid, minutes);
+  await updateStreakAndBadges(uid, mins);
 
-  return { savedMinutes: minutes };
+  return { savedMinutes: mins };
 }
 
 /**
- * يحدث الـ streak (أيام متتالية) والبادجز البسيطة بعد كل جلسة محفوظة.
+ * يحدث الـ streak (أيام متتالية) والبادجز البسيطة بعد كل شوط درس محسوب.
  */
 async function updateStreakAndBadges(uid, minutesJustStudied) {
   const userRef = doc(db, "users", uid);
@@ -89,7 +108,7 @@ async function updateStreakAndBadges(uid, minutesJustStudied) {
   if (!snap.exists()) return;
 
   const data = snap.data();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getDayKey();
   const last = data.lastStudyDate;
 
   let newStreak = data.currentStreak || 0;
@@ -113,8 +132,8 @@ async function updateStreakAndBadges(uid, minutesJustStudied) {
   if (newStreak >= 30) badges.add("streak_30");
 
   const totalAfter = (data.totalMinutes || 0) + minutesJustStudied;
-  if (totalAfter >= 600) badges.add("total_10h"); // 10 ساعات تراكمي
-  if (minutesJustStudied >= 120) badges.add("deep_focus_2h"); // جلسة واحدة ≥ ساعتين
+  if (totalAfter >= 600) badges.add("total_10h");
+  if (minutesJustStudied >= 120) badges.add("deep_focus_2h");
 
   updates.badges = Array.from(badges);
 

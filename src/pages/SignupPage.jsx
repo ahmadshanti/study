@@ -2,10 +2,13 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { signUp } from "../lib/auth.js";
 
+const UNIVERSITY_EMAIL_DOMAIN = "@stu.najah.edu";
+
 const ERROR_MESSAGES = {
   "auth/email-already-in-use": "في حساب موجود بهاد الإيميل من قبل",
   "auth/invalid-email": "صيغة الإيميل مش صح",
   "auth/weak-password": "الباسورد لازم يكون 6 أحرف/أرقام على الأقل",
+  "permission-denied": `لازم تستخدم إيميلك الجامعي (بيخلص بـ ${UNIVERSITY_EMAIL_DOMAIN})`,
 };
 
 export default function SignupPage() {
@@ -21,6 +24,10 @@ export default function SignupPage() {
     setError("");
     if (!name.trim()) {
       setError("لازم تحط اسمك، رح يظهر بالليدربورد");
+      return;
+    }
+    if (!email.trim().toLowerCase().endsWith(UNIVERSITY_EMAIL_DOMAIN)) {
+      setError(`لازم تستخدم إيميلك الجامعي (بيخلص بـ ${UNIVERSITY_EMAIL_DOMAIN})`);
       return;
     }
     setBusy(true);
@@ -44,10 +51,11 @@ export default function SignupPage() {
             <label>الاسم</label>
             <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="شو اسمك؟ (رح يظهر بالليدربورد)" />
           </div>
-          <div className="field">
-            <label>الإيميل</label>
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+          <div className="field" style={{ marginBottom: 6 }}>
+            <label>الإيميل الجامعي</label>
+            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={`s12345678${UNIVERSITY_EMAIL_DOMAIN}`} />
           </div>
+          <p className="hint-text">لازم يكون إيميلك الجامعي (بيخلص بـ {UNIVERSITY_EMAIL_DOMAIN})</p>
           <div className="field">
             <label>الباسورد</label>
             <input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="6 أحرف على الأقل" />

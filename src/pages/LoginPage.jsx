@@ -34,12 +34,12 @@ export default function LoginPage() {
     <div className="auth-page">
       <div className="card auth-card">
         <h2>تسجيل الدخول</h2>
-        <p className="muted">أهلين فيك رجعت، سجل دخولك تكمل مذاكرتك</p>
+        <p className="muted">أهلين فيك، سجل دخولك تكمل مذاكرتك</p>
 
         <form onSubmit={handleSubmit}>
           <div className="field">
             <label>الإيميل</label>
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="s12345678@stu.najah.edu" />
           </div>
           <div className="field">
             <label>الباسورد</label>

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { collection, query, where, onSnapshot, getDocs } from "firebase/firestore";
 import { db, ANTI_CHEAT_INTERVAL_SECONDS, ANTI_CHEAT_RESPONSE_WINDOW_SECONDS } from "../lib/firebase.js";
 import { useAuth } from "../context/AuthContext.jsx";
-import { startActiveSession, endActiveSession } from "../lib/sessions.js";
+import { startActiveSession, clearActiveSession, recordStudyMinutes } from "../lib/sessions.js";
 import { createRoom, joinRoom } from "../lib/rooms.js";
 import Dial from "../components/Dial.jsx";
 import LiveList from "../components/LiveList.jsx";
@@ -11,32 +11,39 @@ import RoomModal from "../components/RoomModal.jsx";
 import { PlayIcon, PauseIcon, StopIcon, PlusIcon, KeyIcon, DoorExitIcon, UsersIcon } from "../components/icons.jsx";
 
 const DEFAULT_ROOM_STATUS = "مش داخل أي غرفة (بتدرس منفرد وبتنحسب بالعام برضو)";
+const DURATION_OPTIONS = [15, 25, 30, 45, 60, 90];
+const BREAKS_OPTIONS = [0, 1, 2, 3, 4];
+const BREAK_SECONDS = 5 * 60;
 
 export default function TimerPage() {
   const { uid, name } = useAuth();
 
-  const [secondsElapsed, setSecondsElapsed] = useState(0);
-  const [sessionActive, setSessionActive] = useState(false);
-  const [paused, setPaused] = useState(false);
-  const [dialTask, setDialTask] = useState("جاهز تبلش؟");
+  // إعداد الجلسة (قبل ما تبلش)
+  const [durationMinutes, setDurationMinutes] = useState(30);
+  const [breaksCount, setBreaksCount] = useState(1);
   const [task, setTask] = useState("");
   const [subjects, setSubjects] = useState([]);
   const [subjectId, setSubjectId] = useState("");
+
+  // حالة الجلسة الشغالة
+  const [phase, setPhase] = useState("idle"); // idle | work | break
+  const [sessionActive, setSessionActive] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const [segmentIndex, setSegmentIndex] = useState(0);
+  const [totalSegments, setTotalSegments] = useState(1);
+  const [segmentSeconds, setSegmentSeconds] = useState(0);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
+
   const [roomId, setRoomId] = useState(null);
   const [roomStatus, setRoomStatus] = useState(DEFAULT_ROOM_STATUS);
   const [liveDocs, setLiveDocs] = useState([]);
   const [antiCheatVisible, setAntiCheatVisible] = useState(false);
   const [roomModalMode, setRoomModalMode] = useState(null);
 
-  const secondsRef = useRef(0);
   const sessionInfoRef = useRef({ task: "", subjectId: null, subjectName: null, roomId: null });
   const antiCheatTimeoutRef = useRef(null);
   const antiCheatDeadlineRef = useRef(null);
   const hiddenAtRef = useRef(null);
-
-  useEffect(() => {
-    secondsRef.current = secondsElapsed;
-  }, [secondsElapsed]);
 
   // تحميل المواد التنافسية
   useEffect(() => {
@@ -56,12 +63,56 @@ export default function TimerPage() {
     return unsub;
   }, []);
 
-  // عداد الوقت
+  // عداد العد التنازلي
   useEffect(() => {
     if (!sessionActive || paused) return;
-    const id = setInterval(() => setSecondsElapsed((s) => s + 1), 1000);
+    const id = setInterval(() => setRemainingSeconds((s) => Math.max(0, s - 1)), 1000);
     return () => clearInterval(id);
   }, [sessionActive, paused]);
+
+  // لما الوقت يخلص لشوط العمل أو الاستراحة الحالي
+  useEffect(() => {
+    if (!sessionActive || remainingSeconds > 0) return;
+    handleSegmentComplete();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remainingSeconds]);
+
+  async function handleSegmentComplete() {
+    if (phase === "work") {
+      const info = sessionInfoRef.current;
+      try {
+        await recordStudyMinutes({
+          uid, name,
+          task: info.task,
+          subjectId: info.subjectId,
+          subjectName: info.subjectName,
+          roomId: info.roomId,
+          minutes: segmentSeconds / 60,
+        });
+      } catch (err) {
+        alert("صار خطأ بتسجيل الوقت (تأكد إنك متصل بالإنترنت) — بس رح نكمل الجلسة.");
+      }
+
+      const nextIndex = segmentIndex + 1;
+      if (nextIndex >= totalSegments) {
+        try { await clearActiveSession(uid); } catch (err) { /* لا شي نعمله هون، الجلسة خلصت أصلاً */ }
+        setSessionActive(false);
+        setPhase("idle");
+        clearAntiCheat();
+        alert(`🎉 خلصت الجلسة! سجلنا ${Math.round((segmentSeconds / 60) * totalSegments)} دقيقة إجمالي.`);
+        return;
+      }
+
+      setSegmentIndex(nextIndex);
+      setPhase("break");
+      setRemainingSeconds(BREAK_SECONDS);
+      clearAntiCheat();
+    } else if (phase === "break") {
+      setPhase("work");
+      setRemainingSeconds(segmentSeconds);
+      scheduleAntiCheat();
+    }
+  }
 
   function clearAntiCheat() {
     if (antiCheatTimeoutRef.current) clearTimeout(antiCheatTimeoutRef.current);
@@ -88,10 +139,8 @@ export default function TimerPage() {
     scheduleAntiCheat();
   }
 
-  // تنظيف المؤقتات لو المستخدم غادر الصفحة والجلسة لسا شغالة
   useEffect(() => () => clearAntiCheat(), []);
 
-  // تحذير لو سكر التاب فترة طويلة
   useEffect(() => {
     function handleVisibility() {
       if (document.hidden && sessionActive) {
@@ -129,18 +178,22 @@ export default function TimerPage() {
       roomId,
     };
 
+    const segments = breaksCount + 1;
+    const workSeconds = Math.max(60, Math.round((durationMinutes * 60) / segments));
+
     await startActiveSession({
-      uid,
-      name,
+      uid, name,
       task: t,
       subjectId: sessionInfoRef.current.subjectId,
       subjectName: sessionInfoRef.current.subjectName,
       roomId,
     });
 
-    secondsRef.current = 0;
-    setSecondsElapsed(0);
-    setDialTask(t);
+    setTotalSegments(segments);
+    setSegmentSeconds(workSeconds);
+    setSegmentIndex(0);
+    setPhase("work");
+    setRemainingSeconds(workSeconds);
     setSessionActive(true);
     setPaused(false);
     scheduleAntiCheat();
@@ -153,34 +206,38 @@ export default function TimerPage() {
 
   function handleResume() {
     setPaused(false);
-    scheduleAntiCheat();
+    if (phase === "work") scheduleAntiCheat();
   }
 
   async function handleStop() {
     clearAntiCheat();
+
+    if (phase === "work") {
+      const elapsedSeconds = segmentSeconds - remainingSeconds;
+      const info = sessionInfoRef.current;
+      if (elapsedSeconds > 0) {
+        try {
+          await recordStudyMinutes({
+            uid, name,
+            task: info.task,
+            subjectId: info.subjectId,
+            subjectName: info.subjectName,
+            roomId: info.roomId,
+            minutes: elapsedSeconds / 60,
+          });
+        } catch (err) {
+          alert("صار خطأ بتسجيل الوقت (تأكد إنك متصل بالإنترنت).");
+        }
+      }
+    }
+
+    try { await clearActiveSession(uid); } catch (err) { /* بنصفّر الحالة محلياً برضو */ }
+
     setSessionActive(false);
     setPaused(false);
-
-    const info = sessionInfoRef.current;
-    const elapsedMinutes = secondsRef.current / 60;
-
-    const { savedMinutes } = await endActiveSession({
-      uid,
-      name,
-      task: info.task,
-      subjectId: info.subjectId,
-      subjectName: info.subjectName,
-      roomId: info.roomId,
-      elapsedMinutes,
-    });
-
-    setDialTask("جاهز تبلش؟");
-    setSecondsElapsed(0);
-    secondsRef.current = 0;
-
-    if (savedMinutes > 0) {
-      alert(`💪 سجلنا ${savedMinutes} دقيقة! استمر.`);
-    }
+    setPhase("idle");
+    setSegmentIndex(0);
+    setRemainingSeconds(0);
   }
 
   async function handleCreateRoom({ name: roomName, password }) {
@@ -202,19 +259,40 @@ export default function TimerPage() {
     setRoomStatus(DEFAULT_ROOM_STATUS);
   }
 
+  const dialTaskLabel = phase === "break" ? "استراحة ☕" : sessionInfoRef.current.task || "جاهز تبلش؟";
+
   return (
     <div className="container">
       <div className="grid-2">
         <div>
           <div className="card">
             <h2>أهلين، <span>{name || "..."}</span> 👋</h2>
-            <p className="muted">اختار شو رح تدرس، وابلش. رح يظهرك لباقي الطلاب بالـ Live لحد ما تخلص.</p>
+            <p className="muted">حدد مدة الدراسة وعدد البريكات، وابلش. رح يظهرك لباقي الطلاب بالـ Live لحد ما تخلص.</p>
 
             <div className="dial-wrap">
-              <Dial secondsElapsed={secondsElapsed} dialTask={dialTask} />
+              <Dial
+                remainingSeconds={sessionActive ? remainingSeconds : durationMinutes * 60}
+                totalSeconds={sessionActive ? (phase === "break" ? BREAK_SECONDS : segmentSeconds) : durationMinutes * 60}
+                task={dialTaskLabel}
+                phase={phase === "break" ? "break" : "work"}
+              />
+
+              {sessionActive && (
+                <span className={`phase-badge ${phase === "break" ? "break" : "work"}`}>
+                  {phase === "break" ? "وقت استراحة" : `شوط ${segmentIndex + 1} من ${totalSegments}`}
+                </span>
+              )}
+
+              {sessionActive && totalSegments > 1 && (
+                <div className="segment-dots">
+                  {Array.from({ length: totalSegments }).map((_, i) => (
+                    <span key={i} className={i < segmentIndex ? "done" : i === segmentIndex && phase === "work" ? "current" : ""} />
+                  ))}
+                </div>
+              )}
 
               {sessionActive && paused && (
-                <p className="muted" style={{ margin: "-8px 0 0" }}>الوقت متوقف مؤقتاً</p>
+                <p className="muted" style={{ margin: 0 }}>الوقت متوقف مؤقتاً</p>
               )}
 
               <div className="timer-actions">
@@ -232,6 +310,27 @@ export default function TimerPage() {
                 )}
               </div>
             </div>
+
+            {!sessionActive && (
+              <div className="setup-row" style={{ marginTop: 8 }}>
+                <div className="field" style={{ marginBottom: 0 }}>
+                  <label>مدة الدراسة</label>
+                  <select value={durationMinutes} onChange={(e) => setDurationMinutes(Number(e.target.value))}>
+                    {DURATION_OPTIONS.map((m) => (
+                      <option key={m} value={m}>{m} دقيقة{m >= 60 ? ` (${m / 60} ساعة)` : ""}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field" style={{ marginBottom: 0 }}>
+                  <label>عدد البريكات (5 دقايق لكل وحدة)</label>
+                  <select value={breaksCount} onChange={(e) => setBreaksCount(Number(e.target.value))}>
+                    {BREAKS_OPTIONS.map((b) => (
+                      <option key={b} value={b}>{b === 0 ? "بدون بريك" : `${b} بريك`}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
 
             <div className="field" style={{ marginTop: 20 }}>
               <label>شو رح تدرس؟ (تاسك حر)</label>
@@ -270,7 +369,7 @@ export default function TimerPage() {
           <div className="card">
             <div className="section-title">
               <h3 style={{ margin: 0, fontSize: 15, display: "flex", alignItems: "center", gap: 8 }}>
-                <span className="dot"></span> شغالين هلق
+                <span className="dot"></span> شغالين الان
               </h3>
             </div>
             <div>
