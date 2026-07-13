@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { collection, query, where, onSnapshot, getDocs } from "firebase/firestore";
-import { db, ANTI_CHEAT_INTERVAL_SECONDS, ANTI_CHEAT_RESPONSE_WINDOW_SECONDS } from "../lib/firebase.js";
+import { db } from "../lib/firebase.js";
 import { useAuth } from "../context/AuthContext.jsx";
-import { startActiveSession, clearActiveSession, recordStudyMinutes } from "../lib/sessions.js";
-import { createRoom, joinRoom, getRoom } from "../lib/rooms.js";
+import { getRoom } from "../lib/rooms.js";
+import { createRoom, joinRoom } from "../lib/rooms.js";
+import { usePomodoroTimer, BREAK_SECONDS } from "../hooks/usePomodoroTimer.js";
 import Dial from "../components/Dial.jsx";
 import LiveList from "../components/LiveList.jsx";
 import AntiCheatOverlay from "../components/AntiCheatOverlay.jsx";
@@ -14,7 +15,6 @@ import { PlayIcon, PauseIcon, StopIcon, PlusIcon, KeyIcon, DoorExitIcon, UsersIc
 const DEFAULT_ROOM_STATUS = "مش داخل أي غرفة (بتدرس منفرد وبتنحسب بالعام برضو)";
 const DURATION_OPTIONS = [15, 25, 30, 45, 60, 90];
 const BREAKS_OPTIONS = [0, 1, 2, 3, 4];
-const BREAK_SECONDS = 5 * 60;
 
 export default function TimerPage() {
   const { uid, name } = useAuth();
@@ -27,25 +27,16 @@ export default function TimerPage() {
   const [subjects, setSubjects] = useState([]);
   const [subjectId, setSubjectId] = useState("");
 
-  // حالة الجلسة الشغالة
-  const [phase, setPhase] = useState("idle"); // idle | work | break
-  const [sessionActive, setSessionActive] = useState(false);
-  const [paused, setPaused] = useState(false);
-  const [segmentIndex, setSegmentIndex] = useState(0);
-  const [totalSegments, setTotalSegments] = useState(1);
-  const [segmentSeconds, setSegmentSeconds] = useState(0);
-  const [remainingSeconds, setRemainingSeconds] = useState(0);
-
   const [roomId, setRoomId] = useState(null);
   const [roomStatus, setRoomStatus] = useState(DEFAULT_ROOM_STATUS);
   const [liveDocs, setLiveDocs] = useState([]);
-  const [antiCheatVisible, setAntiCheatVisible] = useState(false);
   const [roomModalMode, setRoomModalMode] = useState(null);
 
-  const sessionInfoRef = useRef({ task: "", subjectId: null, subjectName: null, roomId: null });
-  const antiCheatTimeoutRef = useRef(null);
-  const antiCheatDeadlineRef = useRef(null);
-  const hiddenAtRef = useRef(null);
+  const timer = usePomodoroTimer({ uid, name });
+  const {
+    phase, sessionActive, paused, segmentIndex, totalSegments, segmentSeconds, remainingSeconds,
+    antiCheatVisible, currentTask, handleStart: startTimer, handlePause, handleResume, handleStop, handleAntiCheatConfirm,
+  } = timer;
 
   // نسترجع الغرفة يلي كان الطالب داخلها لو رجع فتح الصفحة (بتتخزن محلياً بالمتصفح)
   const [roomRestoring, setRoomRestoring] = useState(!!localStorage.getItem("sp_room_id"));
@@ -82,181 +73,17 @@ export default function TimerPage() {
     return unsub;
   }, []);
 
-  // عداد العد التنازلي
-  useEffect(() => {
-    if (!sessionActive || paused) return;
-    const id = setInterval(() => setRemainingSeconds((s) => Math.max(0, s - 1)), 1000);
-    return () => clearInterval(id);
-  }, [sessionActive, paused]);
-
-  // لما الوقت يخلص لشوط العمل أو الاستراحة الحالي
-  useEffect(() => {
-    if (!sessionActive || remainingSeconds > 0) return;
-    handleSegmentComplete();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [remainingSeconds]);
-
-  async function handleSegmentComplete() {
-    if (phase === "work") {
-      const info = sessionInfoRef.current;
-      try {
-        await recordStudyMinutes({
-          uid, name,
-          task: info.task,
-          subjectId: info.subjectId,
-          subjectName: info.subjectName,
-          roomId: info.roomId,
-          minutes: segmentSeconds / 60,
-        });
-      } catch (err) {
-        alert("صار خطأ بتسجيل الوقت (تأكد إنك متصل بالإنترنت) — بس رح نكمل الجلسة.");
-      }
-
-      const nextIndex = segmentIndex + 1;
-      if (nextIndex >= totalSegments) {
-        try { await clearActiveSession(uid); } catch (err) { /* لا شي نعمله هون، الجلسة خلصت أصلاً */ }
-        setSessionActive(false);
-        setPhase("idle");
-        clearAntiCheat();
-        alert(`🎉 خلصت الجلسة! سجلنا ${Math.round((segmentSeconds / 60) * totalSegments)} دقيقة إجمالي.`);
-        return;
-      }
-
-      setSegmentIndex(nextIndex);
-      setPhase("break");
-      setRemainingSeconds(BREAK_SECONDS);
-      clearAntiCheat();
-    } else if (phase === "break") {
-      setPhase("work");
-      setRemainingSeconds(segmentSeconds);
-      scheduleAntiCheat();
-    }
-  }
-
-  function clearAntiCheat() {
-    if (antiCheatTimeoutRef.current) clearTimeout(antiCheatTimeoutRef.current);
-    if (antiCheatDeadlineRef.current) clearTimeout(antiCheatDeadlineRef.current);
-    antiCheatTimeoutRef.current = null;
-    antiCheatDeadlineRef.current = null;
-    setAntiCheatVisible(false);
-  }
-
-  function scheduleAntiCheat() {
-    clearAntiCheat();
-    antiCheatTimeoutRef.current = setTimeout(() => {
-      setAntiCheatVisible(true);
-      antiCheatDeadlineRef.current = setTimeout(() => {
-        setAntiCheatVisible(false);
-        handleStop();
-      }, ANTI_CHEAT_RESPONSE_WINDOW_SECONDS * 1000);
-    }, ANTI_CHEAT_INTERVAL_SECONDS * 1000);
-  }
-
-  function handleAntiCheatConfirm() {
-    if (antiCheatDeadlineRef.current) clearTimeout(antiCheatDeadlineRef.current);
-    setAntiCheatVisible(false);
-    scheduleAntiCheat();
-  }
-
-  useEffect(() => () => clearAntiCheat(), []);
-
-  useEffect(() => {
-    function handleVisibility() {
-      if (document.hidden && sessionActive) {
-        hiddenAtRef.current = Date.now();
-      } else if (!document.hidden && sessionActive && hiddenAtRef.current) {
-        const awaySeconds = (Date.now() - hiddenAtRef.current) / 1000;
-        if (awaySeconds > 180) {
-          alert("لاحظنا إنك سكرت التاب فترة طويلة، فوقفنا حسبة الوقت لهاي الفترة.");
-        }
-        hiddenAtRef.current = null;
-      }
-    }
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [sessionActive]);
-
-  useEffect(() => {
-    function handleBeforeUnload() {
-      if (sessionActive) {
-        navigator.sendBeacon && navigator.sendBeacon("about:blank");
-      }
-    }
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [sessionActive]);
-
   async function handleStart() {
     const t = task.trim() || "بدون عنوان";
     const subject = subjects.find((s) => s.id === subjectId);
-
-    sessionInfoRef.current = {
+    await startTimer({
       task: t,
       subjectId: subjectId || null,
       subjectName: subject ? subject.name : null,
       roomId,
-    };
-
-    const segments = breaksCount + 1;
-    const workSeconds = Math.max(60, Math.round((durationMinutes * 60) / segments));
-
-    await startActiveSession({
-      uid, name,
-      task: t,
-      subjectId: sessionInfoRef.current.subjectId,
-      subjectName: sessionInfoRef.current.subjectName,
-      roomId,
+      durationMinutes,
+      breaksCount,
     });
-
-    setTotalSegments(segments);
-    setSegmentSeconds(workSeconds);
-    setSegmentIndex(0);
-    setPhase("work");
-    setRemainingSeconds(workSeconds);
-    setSessionActive(true);
-    setPaused(false);
-    scheduleAntiCheat();
-  }
-
-  function handlePause() {
-    clearAntiCheat();
-    setPaused(true);
-  }
-
-  function handleResume() {
-    setPaused(false);
-    if (phase === "work") scheduleAntiCheat();
-  }
-
-  async function handleStop() {
-    clearAntiCheat();
-
-    if (phase === "work") {
-      const elapsedSeconds = segmentSeconds - remainingSeconds;
-      const info = sessionInfoRef.current;
-      if (elapsedSeconds > 0) {
-        try {
-          await recordStudyMinutes({
-            uid, name,
-            task: info.task,
-            subjectId: info.subjectId,
-            subjectName: info.subjectName,
-            roomId: info.roomId,
-            minutes: elapsedSeconds / 60,
-          });
-        } catch (err) {
-          alert("صار خطأ بتسجيل الوقت (تأكد إنك متصل بالإنترنت).");
-        }
-      }
-    }
-
-    try { await clearActiveSession(uid); } catch (err) { /* بنصفّر الحالة محلياً برضو */ }
-
-    setSessionActive(false);
-    setPaused(false);
-    setPhase("idle");
-    setSegmentIndex(0);
-    setRemainingSeconds(0);
   }
 
   async function handleCreateRoom({ name: roomName, topic, password }) {
@@ -268,7 +95,7 @@ export default function TimerPage() {
   }
 
   async function handleJoinRoom({ roomId: joinId, password }) {
-    const room = await joinRoom({ roomId: joinId, password });
+    const room = await joinRoom({ roomId: joinId, password, uid, memberName: name });
     setRoomId(room.roomId);
     setRoomStatus(`✅ داخل غرفة: ${room.name}`);
     localStorage.setItem("sp_room_id", room.roomId);
@@ -281,7 +108,7 @@ export default function TimerPage() {
     localStorage.removeItem("sp_room_id");
   }
 
-  const dialTaskLabel = phase === "break" ? "استراحة ☕" : sessionInfoRef.current.task || "جاهز تبلش؟";
+  const dialTaskLabel = phase === "break" ? "استراحة ☕" : currentTask || "جاهز تبلش؟";
 
   return (
     <div className="container">
