@@ -11,15 +11,17 @@ function slugify(name) {
 }
 
 /**
- * ينشئ غرفة جديدة بباسورد. لو الاسم مأخوذ رح يرجع خطأ.
+ * ينشئ غرفة جديدة بباسورد وموضوع دراسة اختياري. لو الاسم مأخوذ رح يرجع خطأ.
  */
-export async function createRoom({ name, password, uid }) {
+export async function createRoom({ name, topic, password, uid, creatorName }) {
   const roomId = slugify(name) + "-" + Math.random().toString(36).slice(2, 6);
   const roomRef = doc(db, "rooms", roomId);
   await setDoc(roomRef, {
     name: name.trim(),
+    topic: topic ? topic.trim() : null,
     password, // نص عادي — بسيط بقصد
     createdBy: uid,
+    createdByName: creatorName || null,
     totalMinutes: 0,
     createdAt: serverTimestamp(),
   });

@@ -7,6 +7,7 @@ import { PlusIcon, KeyIcon } from "./icons.jsx";
  */
 export default function RoomModal({ mode, onClose, onCreate, onJoin }) {
   const [name, setName] = useState("");
+  const [topic, setTopic] = useState("");
   const [roomId, setRoomId] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -21,7 +22,7 @@ export default function RoomModal({ mode, onClose, onCreate, onJoin }) {
     try {
       if (isCreate) {
         if (!name.trim() || !password) throw new Error("لازم تعبي اسم الغرفة والباسورد");
-        await onCreate({ name, password });
+        await onCreate({ name, topic, password });
       } else {
         if (!roomId.trim() || !password) throw new Error("لازم تعبي كود الغرفة والباسورد");
         await onJoin({ roomId: roomId.trim(), password });
@@ -40,10 +41,16 @@ export default function RoomModal({ mode, onClose, onCreate, onJoin }) {
         </h3>
         <form onSubmit={handleSubmit}>
           {isCreate ? (
-            <div className="field">
-              <label>اسم الغرفة</label>
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: فريق الميدترم" autoFocus />
-            </div>
+            <>
+              <div className="field">
+                <label>اسم الغرفة</label>
+                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="مثال: فريق الميدترم" autoFocus />
+              </div>
+              <div className="field">
+                <label>موضوع الدراسة (اختياري)</label>
+                <input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="مثال: مراجعة توزيع الاحتمالات" />
+              </div>
+            </>
           ) : (
             <div className="field">
               <label>كود/اسم الغرفة</label>

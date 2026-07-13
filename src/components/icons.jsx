@@ -112,6 +112,15 @@ export function FlameIcon(props) {
   );
 }
 
+export function EyeIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
 export function TrashIcon(props) {
   return (
     <svg {...base} {...props}>

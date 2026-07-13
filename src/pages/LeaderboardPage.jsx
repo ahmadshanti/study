@@ -5,7 +5,7 @@ import {
 import { db } from "../lib/firebase.js";
 import { getDayKey, getWeekKey, getMonthKey } from "../lib/sessions.js";
 import LeaderboardRows from "../components/LeaderboardRows.jsx";
-import { TrophyIcon, GlobeIcon, BookIcon, UsersIcon } from "../components/icons.jsx";
+import { TrophyIcon, GlobeIcon, BookIcon } from "../components/icons.jsx";
 
 const PERIODS = [
   { key: "all", label: "الكل" },
@@ -25,18 +25,11 @@ export default function LeaderboardPage() {
   const [activeTab, setActiveTab] = useState("global");
   const [period, setPeriod] = useState("all");
   const [globalItems, setGlobalItems] = useState([]);
-  const [teamItems, setTeamItems] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [subjectId, setSubjectId] = useState("");
   const [subjectItems, setSubjectItems] = useState([]);
 
   useEffect(() => {
-    (async () => {
-      const q = query(collection(db, "rooms"), orderBy("totalMinutes", "desc"), limit(50));
-      const snap = await getDocs(q);
-      setTeamItems(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    })();
-
     (async () => {
       const q = query(collection(db, "subjects"), where("isActive", "==", true));
       const snap = await getDocs(q);
@@ -85,9 +78,6 @@ export default function LeaderboardPage() {
         <div className={`tab ${activeTab === "subject" ? "active" : ""}`} onClick={() => setActiveTab("subject")}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><BookIcon width={13} height={13} /> حسب المادة</span>
         </div>
-        <div className={`tab ${activeTab === "team" ? "active" : ""}`} onClick={() => setActiveTab("team")}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><UsersIcon width={13} height={13} /> الفرق</span>
-        </div>
       </div>
 
       {activeTab === "global" && (
@@ -121,7 +111,6 @@ export default function LeaderboardPage() {
             ? <div className="empty-state">لسا ما في مواد تنافسية مفعّلة</div>
             : <LeaderboardRows items={subjectItems} />
         )}
-        {activeTab === "team" && <LeaderboardRows items={teamItems} />}
       </div>
     </div>
   );

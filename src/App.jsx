@@ -7,6 +7,7 @@ import SignupPage from "./pages/SignupPage.jsx";
 import TimerPage from "./pages/TimerPage.jsx";
 import LeaderboardPage from "./pages/LeaderboardPage.jsx";
 import AdminPage from "./pages/AdminPage.jsx";
+import RoomPage from "./pages/RoomPage.jsx";
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
           <Route path="/" element={<TimerPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/admin" element={<AdminPage />} />
+          <Route path="/room/:roomId" element={<RoomPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

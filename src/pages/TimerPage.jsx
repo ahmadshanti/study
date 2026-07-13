@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { collection, query, where, onSnapshot, getDocs } from "firebase/firestore";
 import { db, ANTI_CHEAT_INTERVAL_SECONDS, ANTI_CHEAT_RESPONSE_WINDOW_SECONDS } from "../lib/firebase.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { startActiveSession, clearActiveSession, recordStudyMinutes } from "../lib/sessions.js";
-import { createRoom, joinRoom } from "../lib/rooms.js";
+import { createRoom, joinRoom, getRoom } from "../lib/rooms.js";
 import Dial from "../components/Dial.jsx";
 import LiveList from "../components/LiveList.jsx";
 import AntiCheatOverlay from "../components/AntiCheatOverlay.jsx";
 import RoomModal from "../components/RoomModal.jsx";
-import { PlayIcon, PauseIcon, StopIcon, PlusIcon, KeyIcon, DoorExitIcon, UsersIcon } from "../components/icons.jsx";
+import { PlayIcon, PauseIcon, StopIcon, PlusIcon, KeyIcon, DoorExitIcon, UsersIcon, EyeIcon } from "../components/icons.jsx";
 
 const DEFAULT_ROOM_STATUS = "مش داخل أي غرفة (بتدرس منفرد وبتنحسب بالعام برضو)";
 const DURATION_OPTIONS = [15, 25, 30, 45, 60, 90];
@@ -17,6 +18,7 @@ const BREAK_SECONDS = 5 * 60;
 
 export default function TimerPage() {
   const { uid, name } = useAuth();
+  const navigate = useNavigate();
 
   // إعداد الجلسة (قبل ما تبلش)
   const [durationMinutes, setDurationMinutes] = useState(30);
@@ -44,6 +46,23 @@ export default function TimerPage() {
   const antiCheatTimeoutRef = useRef(null);
   const antiCheatDeadlineRef = useRef(null);
   const hiddenAtRef = useRef(null);
+
+  // نسترجع الغرفة يلي كان الطالب داخلها لو رجع فتح الصفحة (بتتخزن محلياً بالمتصفح)
+  const [roomRestoring, setRoomRestoring] = useState(!!localStorage.getItem("sp_room_id"));
+  useEffect(() => {
+    const savedRoomId = localStorage.getItem("sp_room_id");
+    if (!savedRoomId) return;
+    (async () => {
+      const room = await getRoom(savedRoomId);
+      if (room) {
+        setRoomId(savedRoomId);
+        setRoomStatus(`✅ داخل غرفة: ${room.name}`);
+      } else {
+        localStorage.removeItem("sp_room_id");
+      }
+      setRoomRestoring(false);
+    })();
+  }, []);
 
   // تحميل المواد التنافسية
   useEffect(() => {
@@ -240,10 +259,11 @@ export default function TimerPage() {
     setRemainingSeconds(0);
   }
 
-  async function handleCreateRoom({ name: roomName, password }) {
-    const newRoomId = await createRoom({ name: roomName, password, uid });
+  async function handleCreateRoom({ name: roomName, topic, password }) {
+    const newRoomId = await createRoom({ name: roomName, topic, password, uid, creatorName: name });
     setRoomId(newRoomId);
     setRoomStatus(`✅ داخل غرفة: ${roomName} — شارك الكود: ${newRoomId}`);
+    localStorage.setItem("sp_room_id", newRoomId);
     setRoomModalMode(null);
   }
 
@@ -251,12 +271,14 @@ export default function TimerPage() {
     const room = await joinRoom({ roomId: joinId, password });
     setRoomId(room.roomId);
     setRoomStatus(`✅ داخل غرفة: ${room.name}`);
+    localStorage.setItem("sp_room_id", room.roomId);
     setRoomModalMode(null);
   }
 
   function handleLeaveRoom() {
     setRoomId(null);
     setRoomStatus(DEFAULT_ROOM_STATUS);
+    localStorage.removeItem("sp_room_id");
   }
 
   const dialTaskLabel = phase === "break" ? "استراحة ☕" : sessionInfoRef.current.task || "جاهز تبلش؟";
@@ -297,7 +319,7 @@ export default function TimerPage() {
 
               <div className="timer-actions">
                 {!sessionActive ? (
-                  <button className="btn btn-primary" onClick={handleStart}><PlayIcon /> ابلش الجلسة</button>
+                  <button className="btn btn-primary" onClick={handleStart} disabled={roomRestoring}><PlayIcon /> ابلش الجلسة</button>
                 ) : (
                   <>
                     {!paused ? (
@@ -358,6 +380,9 @@ export default function TimerPage() {
             <div className="section-title"><h3 style={{ margin: 0, fontSize: 15 }}>الغرفة (اختياري)</h3></div>
             <div className="status-chip"><UsersIcon /> {roomStatus}</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {roomId && (
+                <button className="btn btn-primary" onClick={() => navigate(`/room/${roomId}`)}><EyeIcon /> عرض الغرفة</button>
+              )}
               <button className="btn" onClick={() => setRoomModalMode("create")}><PlusIcon /> إنشاء غرفة</button>
               <button className="btn" onClick={() => setRoomModalMode("join")}><KeyIcon /> انضمام لغرفة</button>
               <button className="btn" onClick={handleLeaveRoom}><DoorExitIcon /> مغادرة الغرفة</button>
