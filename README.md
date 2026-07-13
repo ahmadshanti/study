@@ -43,10 +43,14 @@ npm run dev
 ```bash
 npm run build      # بينتج فولدر dist/
 ```
-انشر فولدر `dist/` (مش المشروع كامل) على **Firebase Hosting** أو **Vercel**. بما إنه
-صار SPA (React Router)، لازم rewrite rule يوجّه كل المسارات لـ `index.html` — موجود
-جاهز بملف `firebase.json` لو استخدمت Firebase Hosting (`firebase deploy` بعد
-`firebase init hosting`). لو Vercel، الإعداد التلقائي بيتعرف على Vite عادةً.
+بما إنه صار SPA (React Router)، لازم rewrite rule يوجّه كل المسارات لـ `index.html`
+وإلا أي refresh على مسار غير `/` (زي `/leaderboard` أو `/room/xxx`) بيرجع 404 من
+السيرفر. الملفين جاهزين بالريبو:
+- **Vercel**: `vercel.json` — لو رابط بـ GitHub، أي push بيعمل redeploy تلقائي وياخد
+  الإعداد الجديد معه.
+- **Firebase Hosting**: `firebase.json` (`firebase deploy` بعد `firebase init hosting`).
+
+انشر فولدر `dist/` نفسه لو بترفعه يدوي، مش المشروع كامل.
 
 ### 7. غيّر باسورد الأدمن
 افتح `src/pages/AdminPage.jsx` وبدّل `ADMIN_PASSWORD` لباسورد خاص فيك قبل ما تنشر.
