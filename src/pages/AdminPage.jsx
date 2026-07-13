@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import {
-  collection, addDoc, doc, updateDoc, onSnapshot, serverTimestamp,
+  collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, serverTimestamp, orderBy, query,
 } from "firebase/firestore";
 import { db } from "../lib/firebase.js";
-import { PlusIcon } from "../components/icons.jsx";
+import { PlusIcon, TrashIcon } from "../components/icons.jsx";
+import { BADGE_META } from "../lib/sessions.js";
 
 // ⚠️ حماية بسيطة جداً بباسورد ثابت بالكود — كافية لتمنع الطلاب العاديين
 // من الدخول بالغلط، لكنها مش حماية حقيقية (أي حدا يفتح الكود بيشوفه).
@@ -15,6 +16,8 @@ export default function AdminPage() {
   const [gateInput, setGateInput] = useState("");
   const [newSubjectName, setNewSubjectName] = useState("");
   const [subjects, setSubjects] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
   function handleGateSubmit(e) {
     e.preventDefault();
@@ -27,10 +30,17 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!gated) return;
-    const unsub = onSnapshot(collection(db, "subjects"), (snap) => {
+    const unsubSubjects = onSnapshot(collection(db, "subjects"), (snap) => {
       setSubjects(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
-    return unsub;
+    const unsubStudents = onSnapshot(
+      query(collection(db, "users"), orderBy("totalMinutes", "desc")),
+      (snap) => setStudents(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    );
+    return () => {
+      unsubSubjects();
+      unsubStudents();
+    };
   }, [gated]);
 
   async function handleAddSubject(e) {
@@ -47,6 +57,16 @@ export default function AdminPage() {
 
   async function toggleSubject(id, isActive) {
     await updateDoc(doc(db, "subjects", id), { isActive: !isActive });
+  }
+
+  async function handleDeleteStudent(uid) {
+    try {
+      await deleteDoc(doc(db, "users", uid));
+      await deleteDoc(doc(db, "activeUsers", uid));
+    } catch (err) {
+      alert("ما قدرنا نحذف الطالب — تأكد إنك نشرت آخر نسخة من firestore.rules على Firebase Console.");
+    }
+    setDeleteConfirmId(null);
   }
 
   if (!gated) {
@@ -99,6 +119,51 @@ export default function AdminPage() {
               <button className="btn" onClick={() => toggleSubject(s.id, s.isActive)}>
                 {s.isActive ? "إيقاف" : "تفعيل"}
               </button>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="card">
+        <h3>الطلاب المسجلين ({students.length})</h3>
+        <p className="muted">
+          الحذف من هون بيمسح بيانات الطالب من قاعدة البيانات (الوقت، الستريك، البادجز) بس —
+          حساب الدخول تبعه (الإيميل/الباسورد) بيضل موجود بـ Firebase Authentication، لازم تنمسح من هناك لو بدك توقف دخوله نهائياً.
+        </p>
+        {students.length === 0 ? (
+          <div className="empty-state">ما في طلاب مسجلين لسا</div>
+        ) : (
+          students.map((s) => (
+            <div className="lb-row" key={s.id} style={{ gridTemplateColumns: "1fr auto" }}>
+              <div>
+                <div className="lb-name">{s.name}</div>
+                <div className="lb-sub">{Math.round(s.totalMinutes || 0)} دقيقة إجمالي · ستريك {s.currentStreak || 0} يوم</div>
+                {s.badges && s.badges.length > 0 && (
+                  <div className="badges-row">
+                    {s.badges.map((b) => {
+                      const meta = BADGE_META[b];
+                      const Icon = meta?.icon;
+                      return (
+                        <span className="badge" key={b}>
+                          {Icon && <Icon width={12} height={12} />} {meta?.label || b}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                {deleteConfirmId === s.id ? (
+                  <>
+                    <button className="btn" onClick={() => setDeleteConfirmId(null)}>إلغاء</button>
+                    <button className="btn btn-danger" onClick={() => handleDeleteStudent(s.id)}>تأكيد الحذف</button>
+                  </>
+                ) : (
+                  <button className="btn btn-danger" onClick={() => setDeleteConfirmId(s.id)}>
+                    <TrashIcon /> حذف
+                  </button>
+                )}
+              </div>
             </div>
           ))
         )}

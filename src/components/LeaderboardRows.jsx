@@ -1,11 +1,4 @@
-import { FlameIcon, TrophyIcon, BookIcon, ClockIcon } from "./icons.jsx";
-
-const BADGE_META = {
-  streak_7: { icon: FlameIcon, label: "أسبوع كامل" },
-  streak_30: { icon: TrophyIcon, label: "شهر كامل" },
-  total_10h: { icon: BookIcon, label: "10 ساعات تراكمي" },
-  deep_focus_2h: { icon: ClockIcon, label: "تركيز ساعتين+" },
-};
+import { BADGE_META } from "../lib/sessions.js";
 
 function rankClass(i) {
   if (i === 0) return "top1";

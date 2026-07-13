@@ -4,6 +4,7 @@ import {
   collection, addDoc, serverTimestamp, increment,
   writeBatch,
 } from "firebase/firestore";
+import { FlameIcon, TrophyIcon, BookIcon, ClockIcon } from "../components/icons.jsx";
 
 function pad(n) { return String(n).padStart(2, "0"); }
 
@@ -57,8 +58,10 @@ export async function recordStudyMinutes({ uid, name, task, subjectId, subjectNa
 
   const batch = writeBatch(db);
 
+  // set+merge (بدل update) عشان لو الأدمن حذف حساب الطالب من قاعدة البيانات
+  // وبعدين رجع درس، يتعمله recreate تلقائي بدل ما يفشل بـ "not-found"
   const userRef = doc(db, "users", uid);
-  batch.update(userRef, { totalMinutes: increment(mins) });
+  batch.set(userRef, { name, totalMinutes: increment(mins) }, { merge: true });
 
   if (subjectId) {
     const subjLbRef = doc(db, "leaderboard_subject", subjectId, "students", uid);
@@ -148,9 +151,9 @@ function isYesterday(lastDateStr, todayStr) {
   return diffDays === 1;
 }
 
-export const BADGE_LABELS = {
-  streak_7: "🔥 أسبوع كامل",
-  streak_30: "🏅 شهر كامل",
-  total_10h: "📚 10 ساعات تراكمي",
-  deep_focus_2h: "🎯 جلسة تركيز ساعتين+",
+export const BADGE_META = {
+  streak_7: { icon: FlameIcon, label: "أسبوع كامل" },
+  streak_30: { icon: TrophyIcon, label: "شهر كامل" },
+  total_10h: { icon: BookIcon, label: "10 ساعات تراكمي" },
+  deep_focus_2h: { icon: ClockIcon, label: "تركيز ساعتين+" },
 };

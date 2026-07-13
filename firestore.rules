@@ -10,6 +10,9 @@ service cloud.firestore {
       allow create: if request.auth != null && request.auth.uid == uid
         && request.auth.token.email.matches('.*@stu[.]najah[.]edu$');
       allow update: if request.auth != null && request.auth.uid == uid;
+      // حذف من لوحة الأدمن — نفس الملاحظة تبع subjects تحت: بوابة الأدمن
+      // بالفرونت إند بس (باسورد ثابت بالكود)، مش custom claim حقيقي.
+      allow delete: if request.auth != null;
 
       match /sessions/{sessionId} {
         allow read: if request.auth != null && request.auth.uid == uid;
@@ -21,6 +24,8 @@ service cloud.firestore {
     match /activeUsers/{uid} {
       allow read: if true;
       allow write: if request.auth != null && request.auth.uid == uid;
+      // الأدمن يقدر يمسح جلسة عالقة (تاب اتسكر بدون stop) لحساب حذفه
+      allow delete: if request.auth != null;
     }
 
     // المواد التنافسية - القراءة للكل، الكتابة ممنوعة من الكلاينت
