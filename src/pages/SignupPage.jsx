@@ -1,19 +1,18 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { signUp } from "../lib/auth.js";
-
-const UNIVERSITY_EMAIL_DOMAIN = "@stu.najah.edu";
+import UniversityEmailField, { buildUniversityEmail } from "../components/UniversityEmailField.jsx";
 
 const ERROR_MESSAGES = {
-  "auth/email-already-in-use": "في حساب موجود بهاد الإيميل من قبل",
-  "auth/invalid-email": "صيغة الإيميل مش صح",
+  "auth/email-already-in-use": "في حساب موجود بهاد الرقم الجامعي من قبل",
+  "auth/invalid-email": "الرقم الجامعي مش صح",
   "auth/weak-password": "الباسورد لازم يكون 6 أحرف/أرقام على الأقل",
-  "permission-denied": `لازم تستخدم إيميلك الجامعي (بيخلص بـ ${UNIVERSITY_EMAIL_DOMAIN})`,
+  "permission-denied": "لازم تستخدم رقمك الجامعي الصحيح",
 };
 
 export default function SignupPage() {
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [studentId, setStudentId] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -26,13 +25,13 @@ export default function SignupPage() {
       setError("لازم تحط اسمك، رح يظهر بالليدربورد");
       return;
     }
-    if (!email.trim().toLowerCase().endsWith(UNIVERSITY_EMAIL_DOMAIN)) {
-      setError(`لازم تستخدم إيميلك الجامعي (بيخلص بـ ${UNIVERSITY_EMAIL_DOMAIN})`);
+    if (!studentId.trim()) {
+      setError("لازم تحط رقمك الجامعي");
       return;
     }
     setBusy(true);
     try {
-      await signUp({ name: name.trim(), email, password });
+      await signUp({ name: name.trim(), email: buildUniversityEmail(studentId), password });
       navigate("/");
     } catch (err) {
       setError(ERROR_MESSAGES[err.code] || "صار خطأ، جرب كمان مرة");
@@ -51,11 +50,7 @@ export default function SignupPage() {
             <label>الاسم</label>
             <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="شو اسمك؟ (رح يظهر بالليدربورد)" />
           </div>
-          <div className="field" style={{ marginBottom: 6 }}>
-            <label>الإيميل الجامعي</label>
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder={`s12345678${UNIVERSITY_EMAIL_DOMAIN}`} />
-          </div>
-          <p className="hint-text">لازم يكون إيميلك الجامعي (بيخلص بـ {UNIVERSITY_EMAIL_DOMAIN})</p>
+          <UniversityEmailField studentId={studentId} onChange={setStudentId} />
           <div className="field">
             <label>الباسورد</label>
             <input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="6 أحرف على الأقل" />

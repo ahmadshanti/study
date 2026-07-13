@@ -24,7 +24,6 @@ export default function Topbar() {
         <div className="nav-links">
           <NavLink to="/" end>التايمر</NavLink>
           <NavLink to="/leaderboard">الليدربورد</NavLink>
-          <NavLink to="/admin">أدمن</NavLink>
           <button className="btn-logout" onClick={handleLogout}>
             <LogoutIcon width={13} height={13} />
             خروج

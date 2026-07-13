@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { logIn } from "../lib/auth.js";
+import UniversityEmailField, { buildUniversityEmail } from "../components/UniversityEmailField.jsx";
 
 const ERROR_MESSAGES = {
   "auth/invalid-credential": "الإيميل أو الباسورد غلط",
@@ -11,7 +12,7 @@ const ERROR_MESSAGES = {
 };
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
+  const [studentId, setStudentId] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -22,7 +23,7 @@ export default function LoginPage() {
     setError("");
     setBusy(true);
     try {
-      await logIn({ email, password });
+      await logIn({ email: buildUniversityEmail(studentId), password });
       navigate("/");
     } catch (err) {
       setError(ERROR_MESSAGES[err.code] || "صار خطأ، جرب كمان مرة");
@@ -37,10 +38,7 @@ export default function LoginPage() {
         <p className="muted">أهلين فيك، سجل دخولك تكمل مذاكرتك</p>
 
         <form onSubmit={handleSubmit}>
-          <div className="field">
-            <label>الإيميل</label>
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="s12345678@stu.najah.edu" />
-          </div>
+          <UniversityEmailField studentId={studentId} onChange={setStudentId} />
           <div className="field">
             <label>الباسورد</label>
             <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />

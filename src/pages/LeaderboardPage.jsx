@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  collection, query, where, orderBy, limit, getDocs,
+  collection, query, where, orderBy, limit, getDocs, onSnapshot,
 } from "firebase/firestore";
 import { db } from "../lib/firebase.js";
 import { getDayKey, getWeekKey, getMonthKey } from "../lib/sessions.js";
@@ -40,14 +40,14 @@ export default function LeaderboardPage() {
   }, []);
 
   useEffect(() => {
-    (async () => {
-      const path = periodCollectionPath(period);
-      const q = path
-        ? query(collection(db, ...path), orderBy("totalMinutes", "desc"), limit(50))
-        : query(collection(db, "users"), orderBy("totalMinutes", "desc"), limit(50));
-      const snap = await getDocs(q);
+    const path = periodCollectionPath(period);
+    const q = path
+      ? query(collection(db, ...path), orderBy("totalMinutes", "desc"), limit(50))
+      : query(collection(db, "users"), orderBy("totalMinutes", "desc"), limit(50));
+    const unsub = onSnapshot(q, (snap) => {
       setGlobalItems(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    })();
+    });
+    return unsub;
   }, [period]);
 
   useEffect(() => {
@@ -55,15 +55,15 @@ export default function LeaderboardPage() {
       setSubjectItems([]);
       return;
     }
-    (async () => {
-      const q = query(
-        collection(db, "leaderboard_subject", subjectId, "students"),
-        orderBy("totalMinutes", "desc"),
-        limit(50)
-      );
-      const snap = await getDocs(q);
+    const q = query(
+      collection(db, "leaderboard_subject", subjectId, "students"),
+      orderBy("totalMinutes", "desc"),
+      limit(50)
+    );
+    const unsub = onSnapshot(q, (snap) => {
       setSubjectItems(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    })();
+    });
+    return unsub;
   }, [subjectId]);
 
   return (

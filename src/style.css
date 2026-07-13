@@ -227,6 +227,28 @@ input:focus, select:focus {
 }
 input:disabled, select:disabled { opacity: .5; }
 
+.email-compound {
+  display: flex;
+  align-items: center;
+  direction: ltr;
+  border-bottom: 1.5px solid var(--border);
+  transition: border-color .15s ease;
+}
+.email-compound:focus-within { border-bottom-color: var(--accent); }
+.email-compound .email-affix {
+  color: var(--text-muted);
+  font-size: 14.5px;
+  white-space: nowrap;
+  padding: 10px 2px;
+}
+.email-compound input {
+  border: none;
+  padding: 10px 2px;
+  width: auto;
+  flex: 1;
+  min-width: 70px;
+}
+
 select option { background: var(--paper); color: var(--text); }
 
 label {
@@ -561,10 +583,4 @@ label {
   color: var(--danger);
   font-size: 12.5px;
   margin: -6px 0 16px;
-}
-
-.hint-text {
-  color: var(--text-muted);
-  font-size: 11.5px;
-  margin: -12px 0 16px;
 }
