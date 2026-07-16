@@ -27,3 +27,7 @@ export const MIN_SESSION_MINUTES = 1;
 // كل قديه (بالثواني) لازم الطالب يثبت إنه لسا موجود (anti-cheat prompt)
 export const ANTI_CHEAT_INTERVAL_SECONDS = 600; // كل 10 دقايق
 export const ANTI_CHEAT_RESPONSE_WINDOW_SECONDS = 45; // عنده 45 ثانية يجاوب
+
+// كل قديه (بالثواني) بنرفع الدقايق المنجزة للليدربورد أثناء الجلسة —
+// عشان تقدم الطالب يظهر قدام الكل أول بأول مش بس بآخر الشوط
+export const LEADERBOARD_FLUSH_SECONDS = 300; // كل 5 دقايق
