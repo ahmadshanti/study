@@ -305,25 +305,37 @@ label {
 
 .dial {
   position: relative;
-  width: 200px;
-  height: 200px;
+  width: 250px;
+  height: 250px;
 }
 
-.dial svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.dial svg { width: 100%; height: 100%; overflow: visible; }
 
-.dial-track { fill: none; stroke: var(--border); stroke-width: 3; }
+.dial-ticks line {
+  stroke: var(--border);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.dial-track { fill: none; stroke: var(--border); stroke-width: 4; }
 .dial-progress {
   fill: none;
-  stroke: var(--accent);
-  stroke-width: 3;
+  stroke-width: 5;
   stroke-linecap: round;
-  transition: stroke-dashoffset 1s linear, stroke .3s ease;
-  filter: drop-shadow(0 0 6px rgba(169, 118, 47, 0.35));
+  transition: stroke-dashoffset 1s linear;
+  filter: drop-shadow(0 0 8px rgba(169, 118, 47, 0.4));
 }
 .dial-progress.break {
-  stroke: var(--live);
-  filter: drop-shadow(0 0 6px rgba(47, 143, 95, 0.35));
+  filter: drop-shadow(0 0 8px rgba(47, 143, 95, 0.4));
 }
+
+.dial-knob {
+  fill: #d8b071;
+  stroke: #fffaf0;
+  stroke-width: 2.5;
+  filter: drop-shadow(0 1px 4px rgba(60, 45, 20, 0.4));
+}
+.dial-knob.break { fill: #4aa877; }
 
 .dial-center {
   position: absolute;
@@ -337,10 +349,11 @@ label {
 
 .dial-time {
   font-family: var(--font-mono);
-  font-size: 32px;
+  font-size: 42px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   direction: ltr;
+  letter-spacing: -0.02em;
 }
 
 .dial-task {
@@ -356,6 +369,163 @@ label {
 }
 
 .timer-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+/* ---------------- Stat chips (فوق التايمر) ---------------- */
+
+.stats-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 4px 0 6px;
+}
+
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.stat-chip svg { width: 14px; height: 14px; color: var(--accent); flex-shrink: 0; }
+.stat-chip b {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------- Pill choice chips (المدة والبريكات) ---------------- */
+
+.chip-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.chip {
+  padding: 9px 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.chip:hover { border-color: var(--accent); color: var(--text); }
+.chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-on);
+  box-shadow: 0 6px 16px -8px rgba(169, 118, 47, 0.5);
+}
+.chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------------- Avatars ---------------- */
+
+.avatar-circle {
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: #fffaf0;
+  flex-shrink: 0;
+  box-shadow: inset 0 -2px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* ---------------- Podium (أول 3 مراكز) ---------------- */
+
+.podium {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.podium-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  max-width: 180px;
+}
+
+.podium-crown { color: var(--accent); margin-bottom: -2px; }
+
+.podium-name {
+  font-weight: 700;
+  font-size: 13.5px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.podium-minutes {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--accent);
+  direction: ltr;
+  font-variant-numeric: tabular-nums;
+}
+
+.podium-base {
+  width: 100%;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 20px;
+}
+.podium-slot.p1 .podium-base {
+  height: 76px;
+  background: linear-gradient(180deg, rgba(169, 118, 47, 0.28), rgba(169, 118, 47, 0.1));
+  color: var(--accent);
+  border: 1px solid rgba(169, 118, 47, 0.35);
+  border-bottom: none;
+}
+.podium-slot.p2 .podium-base {
+  height: 54px;
+  background: linear-gradient(180deg, rgba(120, 116, 105, 0.22), rgba(120, 116, 105, 0.08));
+  color: #8a8272;
+  border: 1px solid rgba(120, 116, 105, 0.3);
+  border-bottom: none;
+}
+.podium-slot.p3 .podium-base {
+  height: 40px;
+  background: linear-gradient(180deg, rgba(163, 112, 47, 0.2), rgba(163, 112, 47, 0.07));
+  color: #a3702f;
+  border: 1px solid rgba(163, 112, 47, 0.28);
+  border-bottom: none;
+}
+
+.lb-row.me {
+  background: rgba(169, 118, 47, 0.07);
+  border-radius: var(--radius-md);
+  border-bottom-color: transparent;
+}
+
+.me-chip {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--accent-on);
+  margin-inline-start: 6px;
+  vertical-align: middle;
+}
 
 /* ---------------- Live list ---------------- */
 

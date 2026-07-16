@@ -112,6 +112,14 @@ export function FlameIcon(props) {
   );
 }
 
+export function CrownIcon(props) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M3 18h18M4 17l-1.5-9L8 12l4-7 4 7 5.5-4L20 17H4z" />
+    </svg>
+  );
+}
+
 export function EyeIcon(props) {
   return (
     <svg {...base} {...props}>

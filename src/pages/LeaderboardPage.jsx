@@ -4,8 +4,10 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase.js";
 import { getDayKey, getWeekKey, getMonthKey } from "../lib/sessions.js";
+import { useAuth } from "../context/AuthContext.jsx";
 import LeaderboardRows from "../components/LeaderboardRows.jsx";
-import { TrophyIcon, GlobeIcon, BookIcon } from "../components/icons.jsx";
+import Avatar from "../components/Avatar.jsx";
+import { TrophyIcon, GlobeIcon, BookIcon, CrownIcon } from "../components/icons.jsx";
 
 const PERIODS = [
   { key: "all", label: "الكل" },
@@ -21,7 +23,39 @@ function periodCollectionPath(period) {
   return null; // all-time يستخدم users مباشرة
 }
 
+function Podium({ items, currentUid }) {
+  // الترتيب البصري: الثاني - الأول (بالنص ومرفوع) - الثالث
+  const [first, second, third] = items;
+  const slots = [
+    { item: second, cls: "p2", rank: 2, avatarSize: 52 },
+    { item: first, cls: "p1", rank: 1, avatarSize: 68 },
+    { item: third, cls: "p3", rank: 3, avatarSize: 46 },
+  ];
+
+  return (
+    <div className="podium">
+      {slots.map(({ item, cls, rank, avatarSize }) =>
+        item ? (
+          <div className={`podium-slot ${cls}`} key={rank}>
+            {rank === 1 && <CrownIcon className="podium-crown" width={22} height={22} />}
+            <Avatar name={item.name} size={avatarSize} />
+            <div className="podium-name">
+              {item.name}
+              {currentUid && item.id === currentUid && <span className="me-chip">أنت</span>}
+            </div>
+            <div className="podium-minutes">{Math.round(item.totalMinutes || 0)} د</div>
+            <div className="podium-base">{rank}</div>
+          </div>
+        ) : (
+          <div className={`podium-slot ${cls}`} key={rank} />
+        )
+      )}
+    </div>
+  );
+}
+
 export default function LeaderboardPage() {
+  const { uid } = useAuth();
   const [activeTab, setActiveTab] = useState("global");
   const [period, setPeriod] = useState("all");
   const [globalItems, setGlobalItems] = useState([]);
@@ -66,6 +100,22 @@ export default function LeaderboardPage() {
     return unsub;
   }, [subjectId]);
 
+  function renderBoard(items, { showBadges = false } = {}) {
+    if (items.length === 0) {
+      return <div className="empty-state">ما في بيانات لهالفترة لسا</div>;
+    }
+    const top3 = items.slice(0, 3);
+    const rest = items.slice(3);
+    return (
+      <>
+        <Podium items={top3} currentUid={uid} />
+        {rest.length > 0 && (
+          <LeaderboardRows items={rest} showBadges={showBadges} currentUid={uid} startRank={4} />
+        )}
+      </>
+    );
+  }
+
   return (
     <div className="container">
       <h2 style={{ display: "flex", alignItems: "center", gap: 10 }}><TrophyIcon width={24} height={24} style={{ color: "var(--accent)" }} /> الليدربورد</h2>
@@ -91,7 +141,7 @@ export default function LeaderboardPage() {
       )}
 
       {activeTab === "subject" && (
-        <div style={{ marginBottom: 14 }}>
+        <div style={{ marginBottom: 14, maxWidth: 320 }}>
           <select value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
             {subjects.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
@@ -101,15 +151,11 @@ export default function LeaderboardPage() {
       )}
 
       <div className="card">
-        {activeTab === "global" && (
-          globalItems.length === 0
-            ? <div className="empty-state">ما في بيانات لهالفترة لسا</div>
-            : <LeaderboardRows items={globalItems} showBadges={period === "all"} />
-        )}
+        {activeTab === "global" && renderBoard(globalItems, { showBadges: period === "all" })}
         {activeTab === "subject" && (
           subjects.length === 0
             ? <div className="empty-state">لسا ما في مواد تنافسية مفعّلة</div>
-            : <LeaderboardRows items={subjectItems} />
+            : renderBoard(subjectItems)
         )}
       </div>
     </div>

@@ -1,23 +1,26 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { collection, query, where, onSnapshot, getDocs } from "firebase/firestore";
+import { collection, doc, query, where, onSnapshot, getDocs } from "firebase/firestore";
 import { db } from "../lib/firebase.js";
 import { useAuth } from "../context/AuthContext.jsx";
-import { getRoom } from "../lib/rooms.js";
-import { createRoom, joinRoom } from "../lib/rooms.js";
+import { getRoom, createRoom, joinRoom } from "../lib/rooms.js";
+import { getDayKey } from "../lib/sessions.js";
 import { usePomodoroTimer, BREAK_SECONDS } from "../hooks/usePomodoroTimer.js";
 import Dial from "../components/Dial.jsx";
 import LiveList from "../components/LiveList.jsx";
 import AntiCheatOverlay from "../components/AntiCheatOverlay.jsx";
 import RoomModal from "../components/RoomModal.jsx";
-import { PlayIcon, PauseIcon, StopIcon, PlusIcon, KeyIcon, DoorExitIcon, UsersIcon, EyeIcon } from "../components/icons.jsx";
+import {
+  PlayIcon, PauseIcon, StopIcon, PlusIcon, KeyIcon, DoorExitIcon,
+  UsersIcon, EyeIcon, ClockIcon, FlameIcon, BookIcon,
+} from "../components/icons.jsx";
 
 const DEFAULT_ROOM_STATUS = "مش داخل أي غرفة (بتدرس منفرد وبتنحسب بالعام برضو)";
 const DURATION_OPTIONS = [15, 25, 30, 45, 60, 90];
 const BREAKS_OPTIONS = [0, 1, 2, 3, 4];
 
 export default function TimerPage() {
-  const { uid, name } = useAuth();
+  const { uid, name, userDoc } = useAuth();
   const navigate = useNavigate();
 
   // إعداد الجلسة (قبل ما تبلش)
@@ -31,6 +34,7 @@ export default function TimerPage() {
   const [roomStatus, setRoomStatus] = useState(DEFAULT_ROOM_STATUS);
   const [liveDocs, setLiveDocs] = useState([]);
   const [roomModalMode, setRoomModalMode] = useState(null);
+  const [todayMinutes, setTodayMinutes] = useState(0);
 
   const timer = usePomodoroTimer({ uid, name });
   const {
@@ -73,6 +77,15 @@ export default function TimerPage() {
     return unsub;
   }, []);
 
+  // دقايق اليوم (لايف) — لعرضها بشريط الإحصائيات
+  useEffect(() => {
+    if (!uid) return;
+    const unsub = onSnapshot(doc(db, "leaderboard_daily", getDayKey(), "students", uid), (snap) => {
+      setTodayMinutes(snap.exists() ? Math.round(snap.data().totalMinutes || 0) : 0);
+    });
+    return unsub;
+  }, [uid]);
+
   async function handleStart() {
     const t = task.trim() || "بدون عنوان";
     const subject = subjects.find((s) => s.id === subjectId);
@@ -109,6 +122,8 @@ export default function TimerPage() {
   }
 
   const dialTaskLabel = phase === "break" ? "استراحة ☕" : currentTask || "جاهز تبلش؟";
+  const totalMinutes = Math.round(userDoc?.totalMinutes || 0);
+  const streak = userDoc?.currentStreak || 0;
 
   return (
     <div className="container">
@@ -117,6 +132,12 @@ export default function TimerPage() {
           <div className="card">
             <h2>أهلين، <span>{name || "..."}</span> 👋</h2>
             <p className="muted">حدد مدة الدراسة وعدد البريكات، وابلش. رح يظهرك لباقي الطلاب بالـ Live لحد ما تخلص.</p>
+
+            <div className="stats-row">
+              <span className="stat-chip"><ClockIcon /> اليوم <b>{todayMinutes}</b> د</span>
+              <span className="stat-chip"><FlameIcon /> ستريك <b>{streak}</b> يوم</span>
+              <span className="stat-chip"><BookIcon /> إجمالي <b>{totalMinutes}</b> د</span>
+            </div>
 
             <div className="dial-wrap">
               <Dial
@@ -161,27 +182,41 @@ export default function TimerPage() {
             </div>
 
             {!sessionActive && (
-              <div className="setup-row" style={{ marginTop: 8 }}>
-                <div className="field" style={{ marginBottom: 0 }}>
+              <>
+                <div className="field" style={{ marginTop: 18 }}>
                   <label>مدة الدراسة</label>
-                  <select value={durationMinutes} onChange={(e) => setDurationMinutes(Number(e.target.value))}>
+                  <div className="chip-group">
                     {DURATION_OPTIONS.map((m) => (
-                      <option key={m} value={m}>{m} دقيقة{m >= 60 ? ` (${m / 60} ساعة)` : ""}</option>
+                      <button
+                        type="button"
+                        key={m}
+                        className={`chip ${durationMinutes === m ? "active" : ""}`}
+                        onClick={() => setDurationMinutes(m)}
+                      >
+                        {m >= 60 ? `${m / 60} ساعة` : `${m} د`}
+                      </button>
                     ))}
-                  </select>
+                  </div>
                 </div>
-                <div className="field" style={{ marginBottom: 0 }}>
+                <div className="field">
                   <label>عدد البريكات (5 دقايق لكل وحدة)</label>
-                  <select value={breaksCount} onChange={(e) => setBreaksCount(Number(e.target.value))}>
+                  <div className="chip-group">
                     {BREAKS_OPTIONS.map((b) => (
-                      <option key={b} value={b}>{b === 0 ? "بدون بريك" : `${b} بريك`}</option>
+                      <button
+                        type="button"
+                        key={b}
+                        className={`chip ${breaksCount === b ? "active" : ""}`}
+                        onClick={() => setBreaksCount(b)}
+                      >
+                        {b === 0 ? "بدون" : b}
+                      </button>
                     ))}
-                  </select>
+                  </div>
                 </div>
-              </div>
+              </>
             )}
 
-            <div className="field" style={{ marginTop: 20 }}>
+            <div className="field" style={{ marginTop: 4 }}>
               <label>شو رح تدرس؟ (تاسك حر)</label>
               <input
                 type="text"
@@ -192,7 +227,7 @@ export default function TimerPage() {
               />
             </div>
 
-            <div className="field">
+            <div className="field" style={{ marginBottom: 0 }}>
               <label>أو اختار مادة تنافسية (بتنحسب بليدربورد خاص فيها)</label>
               <select value={subjectId} disabled={sessionActive} onChange={(e) => setSubjectId(e.target.value)}>
                 <option value="">— بدون مادة تنافسية (تاسك حر) —</option>

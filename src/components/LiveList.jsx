@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Avatar from "./Avatar.jsx";
 
 // جلسات أقدم من هيك بالساعات لازم تكون تعلّقت (تاب اتسكر بدون ما ينده stop)
 // مش شغالة فعلاً — منخفيها من قائمة "شغالين هلق" لحد ما تنمسح فعلياً.
@@ -34,20 +35,17 @@ export default function LiveList({ docs }) {
 
   return (
     <>
-      {ranked.map((data, i) => {
-        const initials = (data.name || "?").trim().slice(0, 1);
-        return (
-          <div className="live-item" key={data.id}>
-            <div className={`live-rank ${rankClass(i)}`}>{i + 1}</div>
-            <div className="live-avatar">{initials}</div>
-            <div className="live-meta">
-              <div className="live-name">{data.name}</div>
-              <div className="live-subject">{data.subjectName || data.task || "بدون عنوان"}</div>
-            </div>
-            <div className="live-elapsed">{data.elapsedMin} د</div>
+      {ranked.map((data, i) => (
+        <div className="live-item" key={data.id}>
+          <div className={`live-rank ${rankClass(i)}`}>{i + 1}</div>
+          <Avatar name={data.name} size={36} />
+          <div className="live-meta">
+            <div className="live-name">{data.name}</div>
+            <div className="live-subject">{data.subjectName || data.task || "بدون عنوان"}</div>
           </div>
-        );
-      })}
+          <div className="live-elapsed">{data.elapsedMin} د</div>
+        </div>
+      ))}
     </>
   );
 }
